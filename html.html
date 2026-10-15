@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b171a">
+<meta name="description" content="NotaServis — aplikasi nota service HP untuk konter & teknisi. Buat nota, kelola antrian, cetak & kirim via WhatsApp.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>NotaServis — Nota Service HP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230f272c'/><text x='50' y='70' font-size='56' text-anchor='middle'>🔧</text></svg>">
+<link rel="manifest" href='data:application/manifest+json,{"name":"NotaServis","short_name":"NotaServis","display":"standalone","start_url":".","background_color":"%230b171a","theme_color":"%230b171a"}'>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ══════════ TOP BAR ══════════ -->
+  <header class="topbar">
+    <div class="tb-logo" id="tbInitials">KC</div>
+    <div class="tb-name">
+      <span id="tbNama">KILAT CELL</span>
+      <small>Nota Service HP</small>
+    </div>
+    <div class="tb-right">
+      <div id="tbClock" class="mono">--:--:--</div>
+      <div class="tb-net"><span id="netDot"></span><span id="netTxt">online</span></div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ══════════ BERANDA ══════════ -->
+    <section class="screen active" id="screen-home">
+
+      <div class="board">
+        <div class="board-in">
+          <div class="board-ic" id="homeInitials">KC</div>
+          <div>
+            <h1 id="homeNama">KILAT CELL</h1>
+            <p id="homeTagline">Service HP &amp; Tablet • Bergaransi</p>
+          </div>
+        </div>
+        <div class="board-meta">
+          <span id="homeTgl">—</span>
+          <span class="live-dot"></span>
+          <span id="homeJam" class="mono">--:--:--</span>
+        </div>
+      </div>
+
+      <div class="ticker">
+        <span class="tk-badge">TIPS</span>
+        <span id="tickerText">Selamat datang di NotaServis 👋</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b id="stAktif">0</b><span>Unit Aktif</span></div>
+        <div class="stat"><b id="stSiap">0</b><span>Siap Diambil</span></div>
+        <div class="stat money"><b id="stOmzet">Rp0</b><span>Masuk Hari Ini</span></div>
+      </div>
+
+      <div class="quick">
+        <button class="btn primary big" id="btnNewHome">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Buat Nota Baru
+        </button>
+        <button class="btn ghost" id="btnQueue">Antrian</button>
+      </div>
+
+      <div class="sec-h">
+        <h2>Nota Terbaru</h2>
+        <button class="link" id="btnSeeAll">Lihat semua ›</button>
+      </div>
+      <div id="quickList"></div>
+
+      <footer class="app-foot">NotaServis v1.0 • Data tersimpan aman di perangkat ini</footer>
+    </section>
+
+    <!-- ══════════ FORM NOTA ══════════ -->
+    <section class="screen" id="screen-form">
+      <div class="page-h">
+        <button class="icon-btn" id="btnBackForm">←</button>
+        <h2 id="formTitle">Nota Baru</h2>
+        <span class="no-badge mono" id="formBadge">DRAFT</span>
+      </div>
+
+      <div class="fsec">
+        <div class="fsec-h"><span class="fsec-no">01</span><h3>Pelanggan</h3></div>
+        <label>Nama pelanggan *
+          <input id="fNama" placeholder="cth: Budi Santoso" autocomplete="off">
+        </label>
+        <label>No. WhatsApp
+          <input id="fWa" inputmode="tel" placeholder="08xxxxxxxxxx" autocomplete="off">
+        </label>
+      </div>
+
+      <div class="fsec">
+        <div class="fsec-h"><span class="fsec-no">02</span><h3>Perangkat</h3></div>
+        <label>Merek &amp; tipe
+          <input id="fMerek" placeholder="cth: iPhone 11 / Redmi Note 12">
+        </label>
+        <div class="grid2">
+          <label>Warna <input id="fWarna" placeholder="Hitam"></label>
+          <label>IMEI <input id="fImei" placeholder="opsional"></label>
+        </div>
+        <label>Pola / PIN
+          <input id="fPola" placeholder="opsional — untuk cek unit">
+        </label>
+        <label>Keluhan
+          <textarea id="fKeluhan" rows="2" placeholder="cth: layar pecah, tidak bisa dicas…"></textarea>
+        </label>
+        <label>Estimasi selesai
+          <input id="fEstimasi" type="date">
+        </label>
+      </div>
+
+      <div class="fsec">
+        <div class="fsec-h"><span class="fsec-no">03</span><h3>Layanan &amp; Biaya</h3></div>
+        <div id="itemsWrap"></div>
+        <div class="add-row">
+          <input id="itNama" list="svcNames" placeholder="Ketik / pilih layanan…">
+          <datalist id="svcNames"></datalist>
+          <div class="row2">
+            <input id="itHarga" class="money-input" inputmode="numeric" placeholder="Harga (Rp)">
+            <input id="itQty" inputmode="numeric" value="1" placeholder="Qty">
+          </div>
+          <button class="btn ghost sm" id="btnItemAdd">＋ Tambah ke nota</button>
+        </div>
+        <div class="tot">
+          <div class="grid2">
+            <label>Diskon (Rp) <input id="fDiskon" class="money-input" inputmode="numeric" placeholder="0"></label>
+            <label>DP (Rp) <input id="fDp" class="money-input" inputmode="numeric" placeholder="0"></label>
+          </div>
+          <div class="tr"><span>Subtotal</span><b class="mono" id="tSub">Rp0</b></div>
+          <div class="tr"><span>Diskon</span><b class="mono" id="tDis">− Rp0</b></div>
+          <div class="tr big"><span>TOTAL</span><b class="mono" id="tTot">Rp0</b></div>
+          <div class="tr"><span>DP</span><b class="mono" id="tDp">Rp0</b></div>
+          <div class="tr big hl"><span>SISA</span><b class="mono" id="tSisa">Rp0</b></div>
+        </div>
+      </div>
+
+      <div class="fsec">
+        <div class="fsec-h"><span class="fsec-no">04</span><h3>Status Pengerjaan</h3></div>
+        <div class="seg">
+          <input type="radio" name="status" id="st-antri" value="Antri" checked><label for="st-antri">Antri</label>
+          <input type="radio" name="status" id="st-proses" value="Proses"><label for="st-proses">Proses</label>
+          <input type="radio" name="status" id="st-selesai" value="Selesai"><label for="st-selesai">Selesai</label>
+          <input type="radio" name="status" id="st-diambil" value="Diambil"><label for="st-diambil">Diambil</label>
+        </div>
+      </div>
+
+      <button class="btn primary big" id="btnSave">💾 Simpan Nota</button>
+      <button class="btn ghost big" id="btnCancel" style="margin-top:8px">Batal</button>
+    </section>
+
+    <!-- ══════════ RIWAYAT ══════════ -->
+    <section class="screen" id="screen-history">
+      <div class="page-h"><h2>Riwayat Nota</h2><span class="no-badge mono" id="histCount">0 nota</span></div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="hSearch" placeholder="Cari nama / unit / no. nota…">
+      </div>
+      <div class="chips" id="hChips">
+        <button class="fchip active" data-f="Semua">Semua</button>
+        <button class="fchip" data-f="Antri">Antri</button>
+        <button class="fchip" data-f="Proses">Proses</button>
+        <button class="fchip" data-f="Selesai">Selesai</button>
+        <button class="fchip" data-f="Diambil">Diambil</button>
+      </div>
+      <div id="historyList"></div>
+    </section>
+
+    <!-- ══════════ DAFTAR LAYANAN ══════════ -->
+    <section class="screen" id="screen-services">
+      <div class="page-h">
+        <h2>Daftar Layanan</h2>
+        <button class="btn primary sm" id="btnAddSvc">＋ Tambah</button>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="sSearch" placeholder="Cari layanan…">
+      </div>
+      <div class="chips" id="svcCats"></div>
+      <div id="svcList"></div>
+    </section>
+
+    <!-- ══════════ PROFIL & PENGATURAN ══════════ -->
+    <section class="screen" id="screen-profile">
+      <div class="page-h"><h2>Pengaturan</h2></div>
+
+      <div class="fsec">
+        <div class="fsec-h"><span class="fsec-no">🏪</span><h3>Identitas Toko</h3></div>
+        <label>Nama toko <input id="pNama"></label>
+        <label>Tagline <input id="pTagline"></label>
+        <label>Alamat <input id="pAlamat"></label>
+        <div class="grid2">
+          <label>No. Telepon / WA <input id="pTelp"></label>
+          <label>Inisial logo <input id="pInisial" maxlength="3"></label>
+        </div>
+        <label>Catatan kaki nota <textarea id="pFooter" rows="2"></textarea></label>
+        <button class="btn primary" id="btnSaveSettings">Simpan Identitas</button>
+      </div>
+
+      <div class="fsec">
+        <div class="fsec-h"><span class="fsec-no">💾</span><h3>Data</h3></div>
+        <p class="hint">Tersimpan: <b id="dNotas">0</b> nota • <b id="dServices">0</b> layanan</p>
+        <div class="tools">
+          <button class="btn ghost sm" id="btnExport">⬇ Export Backup</button>
+          <button class="btn ghost sm" id="btnImportLbl">⬆ Import Backup</button>
+          <input type="file" id="importFile" accept=".json,application/json" hidden>
+          <button class="btn ghost sm" id="btnSample">✨ Muat Data Contoh</button>
+          <button class="btn ghost sm danger-btn" id="btnReset">🗑 Reset Semua</button>
+        </div>
+      </div>
+
+      <div class="fsec about">
+        <div class="fsec-h"><span class="fsec-no">⚙</span><h3>Tentang</h3></div>
+        <p><b>NotaServis v1.0</b> — aplikasi nota service HP berbasis web. Tanpa server, tanpa login, data 100% di perangkat Anda. Bisa dipasang ke layar utama seperti aplikasi dari Play Store.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ══════════ TAB BAR + FAB ══════════ -->
+  <nav class="tabbar">
+    <button class="tab active" data-tab="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+      <span>Beranda</span>
+    </button>
+    <button class="tab" data-tab="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+      <span>Riwayat</span>
+    </button>
+    <div class="fab-slot">
+      <button class="fab" id="fabBtn" aria-label="Nota baru">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+    <button class="tab" data-tab="services">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4.5 4.5 0 0 0-6 6L3 18v3h3l5.7-5.7a4.5 4.5 0 0 0 6-6l-3 3-2.3-2.3z"/></svg>
+      <span>Layanan</span>
+    </button>
+    <button class="tab" data-tab="profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-5.5 8-5.5s6.5 1.5 8 5.5"/></svg>
+      <span>Profil</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ══════════ MODAL PRATINJAU NOTA ══════════ -->
+<div class="overlay" id="notaModal">
+  <div class="sheet">
+    <div class="sheet-h">
+      <h3>Pratinjau Nota</h3>
+      <button class="icon-btn" id="btnCloseNota">✕</button>
+    </div>
+    <div class="sheet-body" id="notaBody"></div>
+    <div class="sheet-actions">
+      <button class="btn primary" id="btnPrint">🖨 Cetak</button>
+      <button class="btn green" id="btnWa">WhatsApp</button>
+      <button class="btn ghost" id="btnEditNota">✏ Edit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL LAYANAN ══════════ -->
+<div class="overlay" id="svcModal">
+  <div class="sheet sheet-sm">
+    <div class="sheet-h"><h3 id="svcModalTitle">Tambah Layanan</h3><button class="icon-btn" id="btnSvcClose">✕</button></div>
+    <div class="sheet-body">
+      <input type="hidden" id="svId">
+      <label>Nama layanan <input id="svNama" placeholder="cth: Ganti LCD"></label>
+      <label>Kategori <input id="svKat" list="katList" placeholder="cth: Baterai"><datalist id="katList"></datalist></label>
+      <label>Harga (Rp) <input id="svHarga" class="money-input" inputmode="numeric" placeholder="150000"></label>
+    </div>
+    <div class="sheet-actions one">
+      <button class="btn primary" id="btnSvcSave">Simpan Layanan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL KONFIRMASI ══════════ -->
+<div class="overlay" id="confirmModal">
+  <div class="confirm-card">
+    <h3 id="cfTitle">Yakin?</h3>
+    <p id="cfMsg"></p>
+    <div class="cf-btns">
+      <button class="btn ghost sm" id="cfCancel">Batal</button>
+      <button class="btn primary sm" id="cfOk">Ya, lanjut</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="printArea"></div>
+
+<script src="js/data.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>

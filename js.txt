@@ -1,0 +1,536 @@
+/* ═══════════════════════════════════════════
+   script.js — Logika utama NotaServis
+   ═══════════════════════════════════════════ */
+
+/* ── Util ── */
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const BLN = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+const HARI = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+const pad = n => String(n).padStart(2, "0");
+const rupiah = n => "Rp" + (Number(n) || 0).toLocaleString("id-ID");
+const parseAngka = v => Number(String(v || "").replace(/[^\d]/g, "")) || 0;
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const fmtTgl  = ts => { const d = new Date(ts); return `${d.getDate()} ${BLN[d.getMonth()]} ${d.getFullYear()}`; };
+const fmtJam  = ts => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const tglInput = ts => { const d = new Date(ts); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const dariInput = v => { if(!v) return null; const [y,m,d] = v.split("-").map(Number); return new Date(y, m-1, d).getTime(); };
+
+/* ── Penyimpanan (localStorage) ── */
+const DB = {
+  get(k, f){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; }catch(e){ return f; } },
+  set(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+};
+let notas    = DB.get("ns_notas", []);
+let services = DB.get("ns_services", null);
+let settings = DB.get("ns_settings", null);
+
+// Muat data contoh hanya pada pemakaian pertama
+if (!localStorage.getItem("ns_init")) {
+  notas = [...SAMPLE_NOTAS];
+  DB.set("ns_notas", notas);
+  localStorage.setItem("ns_init", "1");
+}
+if (!services || !services.length) services = [...DEFAULT_SERVICES];
+if (!settings) settings = { ...DEFAULT_SETTINGS };
+const persist = () => { DB.set("ns_notas", notas); DB.set("ns_services", services); DB.set("ns_settings", settings); };
+
+const byId = id => notas.find(n => n.id === id);
+const nextStatus = s => { const i = STATUS_LIST.indexOf(s); return i < 3 ? STATUS_LIST[i+1] : null; };
+
+/* ── Toast & Konfirmasi ── */
+let toastTimer;
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+}
+let cfResolve = null;
+function confirmBox(title, msg, ok = "Ya, lanjut"){
+  $("#cfTitle").textContent = title; $("#cfMsg").textContent = msg; $("#cfOk").textContent = ok;
+  $("#confirmModal").classList.add("show");
+  return new Promise(r => cfResolve = r);
+}
+$("#cfOk").onclick     = () => { $("#confirmModal").classList.remove("show"); cfResolve && cfResolve(true); };
+$("#cfCancel").onclick = () => { $("#confirmModal").classList.remove("show"); cfResolve && cfResolve(false); };
+$("#confirmModal").addEventListener("click", e => {
+  if (e.target.id === "confirmModal"){ $("#confirmModal").classList.remove("show"); cfResolve && cfResolve(false); }
+});
+
+/* ── Reveal saat scroll ── */
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); }
+}), { threshold: .08 });
+const observe = box => box.querySelectorAll(".reveal:not(.in)").forEach(el => io.observe(el));
+
+/* ── Router ── */
+let lastTab = "home";
+function go(tab){
+  $$(".screen").forEach(s => s.classList.toggle("active", s.id === "screen-" + tab));
+  $$(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.body.classList.toggle("in-form", tab === "form");
+  if (tab !== "form") lastTab = tab;
+  if (tab === "home")     renderHome();
+  if (tab === "history")  renderHistory();
+  if (tab === "services") renderServices();
+  if (tab === "profile")  renderProfile();
+  window.scrollTo({ top: 0 });
+}
+$$(".tab").forEach(b => b.onclick = () => go(b.dataset.tab));
+
+/* ── Jam & status online ── */
+function tick(){
+  const d = new Date();
+  const jam = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  $("#tbClock").textContent = jam;
+  $("#homeJam").textContent = jam;
+  $("#homeTgl").textContent = `${HARI[d.getDay()]}, ${d.getDate()} ${BLN[d.getMonth()]} ${d.getFullYear()}`;
+}
+function netState(){
+  const on = navigator.onLine;
+  $("#netDot").classList.toggle("off", !on);
+  $("#netTxt").textContent = on ? "online" : "offline";
+}
+window.addEventListener("online", netState);
+window.addEventListener("offline", netState);
+
+/* ── Ticker tips ── */
+let tipI = 0;
+setInterval(() => {
+  const el = $("#tickerText"); if (!el) return;
+  el.classList.add("fade");
+  setTimeout(() => { tipI = (tipI + 1) % TIPS.length; el.textContent = TIPS[tipI]; el.classList.remove("fade"); }, 350);
+}, 5000);
+
+/* ── Animasi angka statistik ── */
+function countUp(el, target, money){
+  const from = Number(el.dataset.v || 0); el.dataset.v = target;
+  const start = performance.now(), dur = 550;
+  (function f(t){
+    const p = Math.min((t - start) / dur, 1), e = 1 - Math.pow(1 - p, 3);
+    const val = Math.round(from + (target - from) * e);
+    el.textContent = money ? rupiah(val) : val;
+    if (p < 1) requestAnimationFrame(f);
+  })(start);
+}
+
+/* ── Identitas toko ── */
+function applyIdentity(){
+  $("#tbNama").textContent = settings.nama;
+  $("#tbInitials").textContent = settings.inisial || settings.nama.slice(0, 2).toUpperCase();
+  $("#homeNama").textContent = settings.nama;
+  $("#homeTagline").textContent = settings.tagline;
+  $("#homeInitials").textContent = settings.inisial || settings.nama.slice(0, 2).toUpperCase();
+  document.title = settings.nama + " — Nota Service HP";
+}
+
+/* ═══════════ BERANDA ═══════════ */
+function renderHome(){
+  applyIdentity();
+  const today = ts => new Date(ts).toDateString() === new Date().toDateString();
+  const aktif = notas.filter(n => n.status === "Antri" || n.status === "Proses").length;
+  const siap  = notas.filter(n => n.status === "Selesai").length;
+  let masuk = notas.filter(n => today(n.tgl)).reduce((a, n) => a + n.dp, 0);
+  masuk    += notas.filter(n => n.tglKeluar && today(n.tglKeluar)).reduce((a, n) => a + n.sisa, 0);
+  countUp($("#stAktif"), aktif); countUp($("#stSiap"), siap); countUp($("#stOmzet"), masuk, true);
+
+  const box = $("#quickList");
+  const latest = [...notas].sort((a, b) => b.tgl - a.tgl).slice(0, 4);
+  box.innerHTML = latest.length ? latest.map(n => `
+    <button class="qrow reveal" data-id="${n.id}">
+      <span class="q-st dot-${n.status.toLowerCase()}"></span>
+      <span class="q-info"><b>${esc(n.cust.nama)}</b><small>${esc(n.device.merek || "—")} • ${n.nomor}</small></span>
+      <span class="q-right"><b class="mono">${rupiah(n.total)}</b><small>${n.status}</small></span>
+    </button>`).join("")
+    : `<div class="empty"><span class="big">🧾</span><p>Belum ada nota.<br>Tekan tombol <b>＋</b> untuk membuat nota pertama.</p></div>`;
+  observe(box);
+  box.querySelectorAll(".qrow").forEach(b => b.onclick = () => openNota(byId(b.dataset.id)));
+}
+$("#btnNewHome").onclick = () => openForm();
+$("#btnSeeAll").onclick  = () => go("history");
+$("#btnQueue").onclick   = () => { setFilter("Antri"); go("history"); };
+
+/* ═══════════ NOMOR NOTA ═══════════ */
+function nextNomor(){
+  const d = new Date();
+  const ymd = String(d.getFullYear()).slice(2) + pad(d.getMonth() + 1) + pad(d.getDate());
+  let seq = DB.get("ns_seq", { ymd, n: 0 });
+  if (seq.ymd !== ymd) seq = { ymd, n: 0 };
+  seq.n++; DB.set("ns_seq", seq);
+  return `NS-${ymd}-${String(seq.n).padStart(3, "0")}`;
+}
+
+/* ═══════════ FORM NOTA ═══════════ */
+let formItems = [], editingId = null;
+
+function resetFormFields(){
+  ["fNama","fWa","fMerek","fWarna","fImei","fPola","fKeluhan","fDiskon","fDp","itNama","itHarga"].forEach(i => $("#"+i).value = "");
+  $("#itQty").value = 1;
+  const d = new Date(Date.now() + 2 * 864e5); $("#fEstimasi").value = tglInput(d.getTime());
+  $("#st-antri").checked = true;
+  formItems = []; editingId = null;
+  $("#formTitle").textContent = "Nota Baru";
+  $("#formBadge").textContent = "DRAFT";
+  renderItems(); updateTotals();
+}
+function openForm(nota){
+  resetFormFields();
+  if (nota){
+    editingId = nota.id;
+    $("#formTitle").textContent = "Edit Nota";
+    $("#formBadge").textContent = nota.nomor;
+    $("#fNama").value = nota.cust.nama; $("#fWa").value = nota.cust.wa || "";
+    $("#fMerek").value = nota.device.merek || ""; $("#fWarna").value = nota.device.warna || "";
+    $("#fImei").value = nota.device.imei || ""; $("#fPola").value = nota.device.pola || "";
+    $("#fKeluhan").value = nota.keluhan || "";
+    $("#fEstimasi").value = nota.estimasi ? tglInput(nota.estimasi) : "";
+    formItems = nota.items.map(i => ({ ...i }));
+    if (nota.diskon) $("#fDiskon").value = nota.diskon.toLocaleString("id-ID");
+    if (nota.dp)     $("#fDp").value     = nota.dp.toLocaleString("id-ID");
+    const r = $("#st-" + nota.status.toLowerCase()); if (r) r.checked = true;
+  }
+  renderItems(); updateTotals(); go("form");
+}
+
+function renderItems(){
+  const w = $("#itemsWrap");
+  w.innerHTML = formItems.map((it, i) => `
+    <div class="item-row">
+      <div class="ir-name">${esc(it.nama)}<small>${rupiah(it.harga)} × ${it.qty}</small></div>
+      <div class="ir-qty">
+        <button data-act="dec" data-i="${i}">−</button><b>${it.qty}</b><button data-act="inc" data-i="${i}">＋</button>
+      </div>
+      <div class="ir-total mono">${rupiah(it.harga * it.qty)}</div>
+      <button class="ir-del" data-act="del" data-i="${i}">✕</button>
+    </div>`).join("") || `<p class="hint" style="text-align:center">Belum ada layanan — tambah di bawah ⤵</p>`;
+}
+$("#itemsWrap").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const i = +b.dataset.i, it = formItems[i];
+  if (b.dataset.act === "inc") it.qty++;
+  if (b.dataset.act === "dec") it.qty = Math.max(1, it.qty - 1);
+  if (b.dataset.act === "del") formItems.splice(i, 1);
+  renderItems(); updateTotals();
+});
+function buildDatalist(){
+  $("#svcNames").innerHTML = services.map(s => `<option value="${esc(s.nama)}">`).join("");
+  $("#katList").innerHTML  = KATEGORI_LAYANAN.map(k => `<option value="${esc(k)}">`).join("");
+}
+// auto-isi harga saat memilih layanan yang sudah ada
+$("#itNama").addEventListener("change", () => {
+  const s = services.find(x => x.nama.toLowerCase() === $("#itNama").value.trim().toLowerCase());
+  if (s) $("#itHarga").value = s.harga.toLocaleString("id-ID");
+});
+$("#btnItemAdd").onclick = () => {
+  const nama = $("#itNama").value.trim(), harga = parseAngka($("#itHarga").value), qty = parseAngka($("#itQty").value) || 1;
+  if (!nama){ toast("Nama layanan belum diisi"); $("#itNama").classList.add("shake"); setTimeout(()=>$("#itNama").classList.remove("shake"),400); return; }
+  if (!harga){ toast("Harga belum diisi"); return; }
+  const ada = formItems.find(i => i.nama.toLowerCase() === nama.toLowerCase());
+  if (ada) ada.qty += qty; else formItems.push({ nama, qty, harga });
+  $("#itNama").value = ""; $("#itHarga").value = ""; $("#itQty").value = 1;
+  renderItems(); updateTotals();
+};
+function updateTotals(){
+  const sub   = formItems.reduce((a, i) => a + i.qty * i.harga, 0);
+  const diskon = parseAngka($("#fDiskon").value), dp = parseAngka($("#fDp").value);
+  const total = Math.max(sub - diskon, 0), sisa = Math.max(total - dp, 0);
+  $("#tSub").textContent = rupiah(sub);
+  $("#tDis").textContent = "− " + rupiah(diskon);
+  $("#tTot").textContent = rupiah(total);
+  $("#tDp").textContent  = rupiah(dp);
+  $("#tSisa").textContent = rupiah(sisa);
+}
+["fDiskon","fDp","itHarga"].forEach(id => {
+  $("#"+id).addEventListener("input", updateTotals);
+  $("#"+id).addEventListener("blur", e => { const n = parseAngka(e.target.value); e.target.value = n ? n.toLocaleString("id-ID") : ""; });
+});
+
+$("#btnSave").onclick = () => {
+  const nama = $("#fNama").value.trim();
+  if (!nama){ toast("Nama pelanggan wajib diisi ⚠"); const f=$("#fNama"); f.classList.add("shake"); setTimeout(()=>f.classList.remove("shake"),400); f.focus(); return; }
+  if (!formItems.length){ toast("Tambahkan minimal 1 layanan ⚠"); return; }
+  const sub = formItems.reduce((a, i) => a + i.qty * i.harga, 0);
+  const diskon = parseAngka($("#fDiskon").value), dp = parseAngka($("#fDp").value);
+  const total = Math.max(sub - diskon, 0), sisa = Math.max(total - dp, 0);
+  const status = document.querySelector('input[name="status"]:checked').value;
+  const lama = editingId ? byId(editingId) : null;
+  const nota = {
+    id: editingId || ("n" + Date.now()),
+    nomor: lama ? lama.nomor : nextNomor(),
+    tgl: lama ? lama.tgl : Date.now(),
+    tglKeluar: status === "Diambil" ? (lama && lama.tglKeluar ? lama.tglKeluar : Date.now()) : null,
+    status,
+    estimasi: $("#fEstimasi").value ? dariInput($("#fEstimasi").value) : null,
+    cust: { nama, wa: $("#fWa").value.trim() },
+    device: {
+      merek: $("#fMerek").value.trim(), warna: $("#fWarna").value.trim(),
+      imei: $("#fImei").value.trim(), pola: $("#fPola").value.trim()
+    },
+    keluhan: $("#fKeluhan").value.trim(),
+    items: formItems.map(i => ({ ...i })),
+    sub, diskon, total, dp, sisa
+  };
+  if (editingId){ const i = notas.findIndex(n => n.id === editingId); notas[i] = nota; }
+  else notas.unshift(nota);
+  persist();
+  toast(editingId ? "Nota diperbarui ✓" : "Nota tersimpan ✓");
+  resetFormFields(); go("home"); openNota(nota);
+};
+$("#btnCancel").onclick   = () => { resetFormFields(); go(lastTab); };
+$("#btnBackForm").onclick = () => { resetFormFields(); go(lastTab); };
+$("#fabBtn").onclick = () => { $("#fabBtn").classList.add("spin"); setTimeout(()=>$("#fabBtn").classList.remove("spin"),350); openForm(); };
+
+/* ═══════════ NOTA (receipt) ═══════════ */
+function receiptHTML(n){
+  const s = settings;
+  const items = n.items.map(i => `
+    <div class="rc-item">
+      <div class="rc-in">${esc(i.nama)}</div>
+      <div class="rc-ix"><span>${i.qty} × ${rupiah(i.harga)}</span><b>${rupiah(i.qty * i.harga)}</b></div>
+    </div>`).join("");
+  const kv = (k, v) => v ? `<div class="rc-kv"><span>${k}</span><b>${esc(v)}</b></div>` : "";
+  return `
+  <div class="rcpt">
+    <div class="rc-cut"></div>
+    <div class="rc-head">
+      <div class="rc-logo">${esc(s.inisial || s.nama.slice(0, 2).toUpperCase())}</div>
+      <div class="rc-nama">${esc(s.nama)}</div>
+      <div class="rc-sub">${esc(s.tagline)}</div>
+      <div class="rc-addr">${esc(s.alamat)} • ${esc(s.telp)}</div>
+    </div>
+    <div class="rc-hr"></div>
+    <div class="rc-kv"><span>No. Nota</span><b>${n.nomor}</b></div>
+    <div class="rc-kv"><span>Tanggal</span><b>${fmtTgl(n.tgl)} ${fmtJam(n.tgl)}</b></div>
+    <div class="rc-kv"><span>Status</span><b>${n.status.toUpperCase()}</b></div>
+    <div class="rc-hr"></div>
+    <div class="rc-kv"><span>Pelanggan</span><b>${esc(n.cust.nama)}</b></div>
+    ${kv("WhatsApp", n.cust.wa)}
+    ${kv("Unit", (n.device.merek || "-") + (n.device.warna ? " • " + n.device.warna : ""))}
+    ${kv("IMEI", n.device.imei)}
+    ${kv("Pola/PIN", n.device.pola)}
+    ${kv("Keluhan", n.keluhan)}
+    <div class="rc-hr"></div>
+    ${items}
+    <div class="rc-hr"></div>
+    <div class="rc-kv"><span>Subtotal</span><b>${rupiah(n.sub)}</b></div>
+    ${n.diskon ? `<div class="rc-kv"><span>Diskon</span><b>− ${rupiah(n.diskon)}</b></div>` : ""}
+    <div class="rc-total"><span>TOTAL</span><b>${rupiah(n.total)}</b></div>
+    <div class="rc-kv"><span>DP</span><b>${rupiah(n.dp)}</b></div>
+    <div class="rc-sisa"><span>SISA</span><b>${rupiah(n.sisa)}</b></div>
+    ${n.estimasi ? `<div class="rc-kv"><span>Estimasi</span><b>${fmtTgl(n.estimasi)}</b></div>` : ""}
+    <div class="rc-hr"></div>
+    <div class="rc-bar"></div>
+    <div class="rc-no">${n.nomor}</div>
+    <div class="rc-foot">${esc(s.footer)}</div>
+  </div>`;
+}
+
+let currentNota = null;
+function openNota(n){
+  if (!n) return;
+  currentNota = n;
+  $("#notaBody").innerHTML = receiptHTML(n);
+  $("#notaModal").classList.add("show");
+}
+$("#btnCloseNota").onclick = () => $("#notaModal").classList.remove("show");
+$("#notaModal").addEventListener("click", e => { if (e.target.id === "notaModal") $("#notaModal").classList.remove("show"); });
+$("#btnPrint").onclick = () => { $("#printArea").innerHTML = receiptHTML(currentNota); window.print(); };
+$("#btnEditNota").onclick = () => { $("#notaModal").classList.remove("show"); openForm(currentNota); };
+
+function waText(n){
+  const s = settings, L = [];
+  L.push(`*${s.nama.toUpperCase()}* — Nota Servis`, `No: ${n.nomor}`, `🗓 ${fmtTgl(n.tgl)} ${fmtJam(n.tgl)}`, "");
+  L.push(`👤 ${n.cust.nama}`, `📱 ${n.device.merek || "-"}${n.device.warna ? " • " + n.device.warna : ""}`);
+  if (n.keluhan) L.push(`📝 Keluhan: ${n.keluhan}`);
+  L.push("", "Rincian:");
+  n.items.forEach(i => L.push(`• ${i.nama} ${i.qty}x ${rupiah(i.harga)}`));
+  L.push("", `Total: ${rupiah(n.total)}`, `DP: ${rupiah(n.dp)}`, `*Sisa: ${rupiah(n.sisa)}*`, `Status: ${n.status.toUpperCase()}`);
+  if (n.estimasi) L.push(`Estimasi selesai: ${fmtTgl(n.estimasi)}`);
+  L.push("", s.footer);
+  return L.join("\n");
+}
+$("#btnWa").onclick = () => {
+  let num = (currentNota.cust.wa || "").replace(/\D/g, "");
+  if (num.startsWith("0")) num = "62" + num;
+  const t = encodeURIComponent(waText(currentNota));
+  window.open(num ? `https://wa.me/${num}?text=${t}` : `https://wa.me/?text=${t}`, "_blank");
+};
+
+/* ═══════════ RIWAYAT ═══════════ */
+let hFilter = "Semua";
+function setFilter(f){
+  hFilter = f;
+  $$("#hChips .fchip").forEach(c => c.classList.toggle("active", c.dataset.f === f));
+}
+$$("#hChips .fchip").forEach(c => c.onclick = () => { setFilter(c.dataset.f); renderHistory(); });
+$("#hSearch").addEventListener("input", renderHistory);
+
+function renderHistory(){
+  const q = $("#hSearch").value.toLowerCase();
+  const list = notas.filter(n =>
+    (hFilter === "Semua" || n.status === hFilter) &&
+    (!q || n.cust.nama.toLowerCase().includes(q) || (n.device.merek || "").toLowerCase().includes(q) || n.nomor.toLowerCase().includes(q))
+  ).sort((a, b) => b.tgl - a.tgl);
+  $("#histCount").textContent = list.length + " nota";
+  const box = $("#historyList");
+  box.innerHTML = list.length ? list.map(n => {
+    const nx = nextStatus(n.status);
+    return `
+    <article class="nota-card reveal">
+      <div class="nc-top">
+        <span class="nc-no mono">${n.nomor}</span>
+        <time>${fmtTgl(n.tgl)}</time>
+        <span class="chip st-${n.status.toLowerCase()}">${n.status}</span>
+      </div>
+      <h3>${esc(n.cust.nama)}</h3>
+      <p class="nc-dev">📱 ${esc(n.device.merek || "—")}${n.device.warna ? " • " + esc(n.device.warna) : ""}${n.keluhan ? " — " + esc(n.keluhan) : ""}</p>
+      <div class="nc-money">
+        <div>Total<b class="mono">${rupiah(n.total)}</b></div>
+        <div>Sisa<b class="mono ${n.sisa ? "" : "lunas"}">${n.sisa ? rupiah(n.sisa) : "LUNAS ✓"}</b></div>
+      </div>
+      <div class="nc-actions">
+        <button class="act-btn" data-act="view" data-id="${n.id}">👁 Lihat</button>
+        ${nx ? `<button class="act-btn next" data-act="next" data-id="${n.id}">▶ ${nx}</button>` : ""}
+        <button class="act-btn" data-act="wa" data-id="${n.id}">✉ WA</button>
+        <button class="act-btn" data-act="edit" data-id="${n.id}">✏ Edit</button>
+        <button class="act-btn del" data-act="del" data-id="${n.id}">🗑</button>
+      </div>
+    </article>`;
+  }).join("") : `<div class="empty"><span class="big">🔍</span><p>Tidak ada nota yang cocok.</p></div>`;
+  observe(box);
+}
+$("#historyList").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const n = byId(b.dataset.id); if (!n) return;
+  if (b.dataset.act === "view") openNota(n);
+  if (b.dataset.act === "edit") openForm(n);
+  if (b.dataset.act === "wa"){ currentNota = n; $("#btnWa").onclick(); }
+  if (b.dataset.act === "next"){
+    const nx = nextStatus(n.status);
+    if (nx){ n.status = nx; if (nx === "Diambil") n.tglKeluar = Date.now(); persist(); toast(`${n.nomor} → ${nx} ✓`); renderHistory(); }
+  }
+  if (b.dataset.act === "del"){
+    if (await confirmBox("Hapus nota?", `Nota ${n.nomor} (${n.cust.nama}) akan dihapus permanen.`, "Hapus")){
+      notas = notas.filter(x => x.id !== n.id); persist(); toast("Nota dihapus"); renderHistory();
+    }
+  }
+});
+
+/* ═══════════ DAFTAR LAYANAN ═══════════ */
+let sKat = "Semua";
+function renderSvcCats(){
+  const cats = ["Semua", ...KATEGORI_LAYANAN];
+  $("#svcCats").innerHTML = cats.map(k => `<button class="fchip ${k===sKat?"active":""}" data-k="${k}">${k}</button>`).join("");
+  $$("#svcCats .fchip").forEach(c => c.onclick = () => { sKat = c.dataset.k; renderServices(); });
+}
+$("#sSearch").addEventListener("input", renderServices);
+function renderServices(){
+  renderSvcCats();
+  const q = $("#sSearch").value.toLowerCase();
+  const list = services.filter(s =>
+    (sKat === "Semua" || s.kategori === sKat) &&
+    (!q || s.nama.toLowerCase().includes(q) || s.kategori.toLowerCase().includes(q))
+  );
+  const box = $("#svcList");
+  box.innerHTML = list.length ? list.map(s => `
+    <div class="svc-row reveal">
+      <div class="sn"><b>${esc(s.nama)}</b><span>${esc(s.kategori)}</span></div>
+      <span class="price mono">${rupiah(s.harga)}</span>
+      <button class="icon-btn" data-act="edit" data-id="${s.id}">✏</button>
+      <button class="icon-btn danger" data-act="del" data-id="${s.id}">🗑</button>
+    </div>`).join("") : `<div class="empty"><span class="big">🔧</span><p>Belum ada layanan di kategori ini.</p></div>`;
+  observe(box);
+}
+$("#svcList").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const s = services.find(x => x.id === b.dataset.id); if (!s) return;
+  if (b.dataset.act === "edit") openSvcModal(s);
+  if (b.dataset.act === "del" && await confirmBox("Hapus layanan?", `"${s.nama}" akan dihapus dari daftar.`, "Hapus")){
+    services = services.filter(x => x.id !== s.id); persist(); buildDatalist(); renderServices(); toast("Layanan dihapus");
+  }
+});
+function openSvcModal(s){
+  $("#svcModalTitle").textContent = s ? "Edit Layanan" : "Tambah Layanan";
+  $("#svId").value = s ? s.id : "";
+  $("#svNama").value = s ? s.nama : "";
+  $("#svKat").value = s ? s.kategori : "";
+  $("#svHarga").value = s ? s.harga.toLocaleString("id-ID") : "";
+  $("#svcModal").classList.add("show");
+}
+$("#btnAddSvc").onclick  = () => openSvcModal(null);
+$("#btnSvcClose").onclick = () => $("#svcModal").classList.remove("show");
+$("#svcModal").addEventListener("click", e => { if (e.target.id === "svcModal") $("#svcModal").classList.remove("show"); });
+$("#btnSvcSave").onclick = () => {
+  const nama = $("#svNama").value.trim(), kat = $("#svKat").value.trim() || "Lainnya", harga = parseAngka($("#svHarga").value);
+  if (!nama || !harga){ toast("Nama & harga wajib diisi ⚠"); return; }
+  const id = $("#svId").value;
+  if (id){ const s = services.find(x => x.id === id); Object.assign(s, { nama, kategori: kat, harga }); }
+  else services.push({ id: "sv" + Date.now(), nama, kategori: kat, harga });
+  persist(); buildDatalist(); renderServices();
+  $("#svcModal").classList.remove("show"); toast("Layanan disimpan ✓");
+};
+$("#svHarga").addEventListener("blur", e => { const n = parseAngka(e.target.value); e.target.value = n ? n.toLocaleString("id-ID") : ""; });
+
+/* ═══════════ PROFIL & DATA ═══════════ */
+function renderProfile(){
+  $("#pNama").value = settings.nama; $("#pTagline").value = settings.tagline;
+  $("#pAlamat").value = settings.alamat; $("#pTelp").value = settings.telp;
+  $("#pFooter").value = settings.footer; $("#pInisial").value = settings.inisial;
+  $("#dNotas").textContent = notas.length; $("#dServices").textContent = services.length;
+}
+$("#btnSaveSettings").onclick = () => {
+  settings = {
+    nama: $("#pNama").value.trim() || "TOKO SAYA",
+    tagline: $("#pTagline").value.trim(),
+    alamat: $("#pAlamat").value.trim(),
+    telp: $("#pTelp").value.trim(),
+    footer: $("#pFooter").value.trim(),
+    inisial: ($("#pInisial").value.trim() || settings.nama.slice(0, 2)).toUpperCase()
+  };
+  persist(); applyIdentity(); toast("Identitas toko disimpan ✓");
+};
+$("#btnExport").onclick = () => {
+  const data = { app: "NotaServis", v: APP_VERSION, exported: Date.now(), settings, services, notas };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  a.download = `notaservis-backup-${tglInput(Date.now()).replaceAll("-", "")}.json`;
+  a.click(); toast("Backup diunduh ✓");
+};
+$("#btnImportLbl").onclick = () => $("#importFile").click();
+$("#importFile").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = async () => {
+    try{
+      const d = JSON.parse(r.result);
+      if (!Array.isArray(d.notas)) throw 0;
+      if (await confirmBox("Import backup?", `${d.notas.length} nota & ${(d.services||[]).length} layanan akan MENGGANTI data saat ini.`, "Import")){
+        notas = d.notas; services = d.services?.length ? d.services : services;
+        if (d.settings) settings = { ...settings, ...d.settings };
+        persist(); buildDatalist(); applyIdentity(); go("home"); toast("Backup berhasil diimport ✓");
+      }
+    }catch(err){ toast("File tidak valid ⚠"); }
+    e.target.value = "";
+  };
+  r.readAsText(f);
+});
+$("#btnSample").onclick = async () => {
+  if (await confirmBox("Muat data contoh?", "Seluruh nota saat ini akan diganti dengan 3 nota contoh.", "Muat")){
+    notas = [...SAMPLE_NOTAS]; persist(); go("home"); toast("Data contoh dimuat ✓");
+  }
+};
+$("#btnReset").onclick = async () => {
+  if (await confirmBox("Reset semua data?", "Seluruh nota, layanan, dan pengaturan akan dihapus permanen.", "Reset")){
+    ["ns_notas","ns_services","ns_settings","ns_seq","ns_init"].forEach(k => localStorage.removeItem(k));
+    location.reload();
+  }
+};
+
+/* ═══════════ INIT ═══════════ */
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") $$(".overlay.show").forEach(o => o.classList.remove("show"));
+});
+buildDatalist(); applyIdentity(); netState(); tick();
+setInterval(tick, 1000);
+$("#tickerText").textContent = TIPS[0];
+go("home");

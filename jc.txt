@@ -1,0 +1,106 @@
+/* ═══════════════════════════════════════════
+   data.js — Data awal NotaServis
+   Ubah sesuai toko & daftar harga Anda.
+   ═══════════════════════════════════════════ */
+
+const APP_VERSION = "1.0.0";
+
+// ── Profil toko default (muncul di nota) ──
+const DEFAULT_SETTINGS = {
+  nama:    "KILAT CELL",
+  tagline: "Service HP & Tablet • Bergaransi 30 Hari",
+  alamat:  "Jl. Melati No. 12, Bandung",
+  telp:    "0812-3456-7890",
+  footer:  "Terima kasih! Simpan nota ini sebagai bukti pengambilan unit.",
+  inisial: "KC"
+};
+
+// ── Kategori layanan ──
+const KATEGORI_LAYANAN = [
+  "Layar / LCD", "Baterai", "Konektor", "Kamera",
+  "Mesin / IC", "Software", "Aksesoris", "Lainnya"
+];
+
+// ── Status pengerjaan (urutan alur) ──
+const STATUS_LIST = ["Antri", "Proses", "Selesai", "Diambil"];
+
+// ── Daftar layanan & harga default ──
+const DEFAULT_SERVICES = [
+  { id:"sv01", kategori:"Layar / LCD", nama:"Ganti LCD HP entry-level",       harga:250000 },
+  { id:"sv02", kategori:"Layar / LCD", nama:"Ganti LCD HP mid-range",         harga:450000 },
+  { id:"sv03", kategori:"Layar / LCD", nama:"Ganti LCD iPhone (OLED)",        harga:950000 },
+  { id:"sv04", kategori:"Layar / LCD", nama:"Ganti kaca / touchscreen",       harga:150000 },
+  { id:"sv05", kategori:"Baterai",     nama:"Ganti baterai HP Android",       harga:150000 },
+  { id:"sv06", kategori:"Baterai",     nama:"Ganti baterai iPhone",           harga:250000 },
+  { id:"sv07", kategori:"Konektor",    nama:"Ganti konektor cas (USB-C)",     harga:120000 },
+  { id:"sv08", kategori:"Konektor",    nama:"Ganti konektor cas (Lightning)", harga:175000 },
+  { id:"sv09", kategori:"Konektor",    nama:"Ganti lubang headset",           harga:90000  },
+  { id:"sv10", kategori:"Kamera",      nama:"Ganti kamera belakang",          harga:200000 },
+  { id:"sv11", kategori:"Kamera",      nama:"Ganti kamera depan",             harga:125000 },
+  { id:"sv12", kategori:"Mesin / IC",  nama:"Ganti IC charger",               harga:200000 },
+  { id:"sv13", kategori:"Mesin / IC",  nama:"Ganti IC power",                 harga:300000 },
+  { id:"sv14", kategori:"Mesin / IC",  nama:"Servis mesin mati total",        harga:350000 },
+  { id:"sv15", kategori:"Software",    nama:"Flash / install ulang OS",       harga:100000 },
+  { id:"sv16", kategori:"Software",    nama:"Buka pola / FRP (aman)",         harga:150000 },
+  { id:"sv17", kategori:"Software",    nama:"Backup & pindah data",           harga:75000  },
+  { id:"sv18", kategori:"Aksesoris",   nama:"Tempered glass",                 harga:35000  },
+  { id:"sv19", kategori:"Aksesoris",   nama:"Softcase / hardcase",            harga:40000  },
+  { id:"sv20", kategori:"Lainnya",     nama:"Pembersihan & cek menyeluruh",   harga:50000  }
+];
+
+// ── Tips berjalan di beranda ──
+const TIPS = [
+  "Catat pola / PIN pelanggan di nota supaya pengecekan lebih cepat.",
+  "Foto kondisi unit sebelum dikerjakan sebagai bukti fisik.",
+  "Nota adalah bukti pengambilan — ingatkan pelanggan menyimpannya.",
+  "Gunakan tombol WhatsApp di nota untuk update pelanggan otomatis.",
+  "Export backup rutin dari menu Profil agar data aman.",
+  "Pasang aplikasi ini ke layar utama HP: buka menu browser → Tambahkan ke layar utama.",
+  "Estimasi selesai yang realistis bikin pelanggan lebih percaya.",
+  "Update status nota jadi 'Selesai' agar muncul di hitungan 'Siap Diambil'."
+];
+
+// ── Data contoh (tanggal relatif hari ini, supaya demo selalu segar) ──
+const SAMPLE_NOTAS = (function(){
+  const now  = Date.now();
+  const d    = n => now - n * 864e5;      // n hari lalu
+  const plus = n => {                      // n hari ke depan (format input date)
+    const t = new Date(now + n * 864e5);
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+  };
+  return [
+    {
+      id:"n-contoh-1", nomor:"NS-CONTOH-001", tgl:d(0), tglKeluar:null,
+      status:"Proses", estimasi:plus(1),
+      cust:{ nama:"Budi Santoso", wa:"081234567890" },
+      device:{ merek:"iPhone 11", warna:"Hitam", imei:"353912108811223", pola:"1470" },
+      keluhan:"Layar pecah kena benturan, touch masih jalan.",
+      items:[
+        { nama:"Ganti LCD iPhone (OLED)", qty:1, harga:950000 },
+        { nama:"Tempered glass",          qty:1, harga:35000  }
+      ],
+      sub:985000, diskon:35000, total:950000, dp:300000, sisa:650000
+    },
+    {
+      id:"n-contoh-2", nomor:"NS-CONTOH-002", tgl:d(1), tglKeluar:null,
+      status:"Selesai", estimasi:plus(0),
+      cust:{ nama:"Siti Rahma", wa:"089876543210" },
+      device:{ merek:"Redmi Note 12", warna:"Biru", imei:"", pola:"••••" },
+      keluhan:"Baterai boros, cepat panas saat charging.",
+      items:[
+        { nama:"Ganti baterai HP Android", qty:1, harga:150000 },
+        { nama:"Pembersihan & cek menyeluruh", qty:1, harga:50000 }
+      ],
+      sub:200000, diskon:0, total:200000, dp:0, sisa:200000
+    },
+    {
+      id:"n-contoh-3", nomor:"NS-CONTOH-003", tgl:d(2), tglKeluar:d(1),
+      status:"Diambil", estimasi:null,
+      cust:{ nama:"Andi Wijaya", wa:"081298765432" },
+      device:{ merek:"Samsung A54", warna:"Putih", imei:"", pola:"" },
+      keluhan:"Tidak bisa dicas, kabel harus ditekan.",
+      items:[ { nama:"Ganti konektor cas (USB-C)", qty:1, harga:120000 } ],
+      sub:120000, diskon:0, total:120000, dp:120000, sisa:0
+    }
+  ];
+})();
