@@ -1,5 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="22" fill="#0f272c"/>
-  <rect x="0" y="0" width="100" height="6" fill="#ffb020"/>
-  <text x="50" y="70" font-size="52" text-anchor="middle" font-family="Arial Black, sans-serif" fill="#ffb020">🔧</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs><clipPath id="rr"><rect width="512" height="512" rx="112"/></clipPath></defs>
+  <g clip-path="url(#rr)">
+    <rect width="512" height="512" fill="#0f272c"/>
+    <rect width="512" height="16" fill="#ffb020"/>
+    <circle cx="256" cy="272" r="152" fill="#ffb020"/>
+    <circle cx="256" cy="272" r="152" fill="none" stroke="#ff8c1a" stroke-width="10"/>
+    <path transform="translate(128,144) scale(10.7)" fill="#0f272c"
+      d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
+    <rect y="488" width="512" height="24" fill="#ffb020" opacity=".25"/>
+  </g>
 </svg>
